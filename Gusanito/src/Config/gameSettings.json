@@ -1,0 +1,7 @@
+{
+  "Width": 25,
+  "Height": 25,
+  "SpeedMs": 120,
+  "WrapAround": false,
+  "ScorePerFood": 10
+}
