@@ -1,5 +1,6 @@
 using Gusanito.Config;
 using Gusanito.Enum;
+using Gusanito.Helpers;
 using Gusanito.Models;
 
 namespace Gusanito.Game;
@@ -19,6 +20,9 @@ public class GameEngine
     
     public CellType[,] Map { get; private set; }
 
+    private readonly Queue<Direction> _inputQueue = new();
+    private const int MaxQueueSize = 2; // evita buffering excesivo
+    
     public GameEngine(GameSettings settings)
     {
         _settings = settings;
@@ -56,6 +60,10 @@ public class GameEngine
     
     public void Update()
     {
+        // Consumir un input al inicio del tick
+        if (_inputQueue.Count > 0)
+            Snake.CurrentDirection = _inputQueue.Dequeue();
+
         var nextHead = Snake.GetNextHeadPosition(); // 👈 clave
 
         //Válida su proximo movimiento.
@@ -111,14 +119,9 @@ public class GameEngine
         InitializeMap();
         GenerateWalls();
         
-        DeleteFood();
         GenerateFood();
     }
     
-    private void DeleteFood()
-    {
-        Map[Food.X, Food.Y] = CellType.Empty;
-    }
     
     private bool IsSelfCollision(Position head)
     {
@@ -133,4 +136,20 @@ public class GameEngine
 
         IsPaused = !IsPaused;
     }
+    
+    public void EnqueueDirection(Direction newDirection)
+    {
+        // La dirección a comparar es la última encolada, o la actual si la cola está vacía
+        var lastDirection = _inputQueue.Count > 0 
+            ? _inputQueue.Last() 
+            : Snake.CurrentDirection;
+
+        if (!DirectionHelper.IsOpposite(lastDirection, newDirection) && lastDirection != newDirection)
+        {
+            if (_inputQueue.Count < MaxQueueSize)
+                _inputQueue.Enqueue(newDirection);
+        }
+    }
+
+    
 }

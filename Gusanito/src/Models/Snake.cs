@@ -7,24 +7,25 @@ public class Snake
 {
     
     public Direction CurrentDirection { get; set; }
-    public LinkedList<Position> Body { get; set; }
+    public LinkedList<Position> Body { get; private set; }
+    public IReadOnlyList<Position> PreviousBody { get; private set; }
 
     public Position Head => Body.First?.Value ?? throw new InvalidOperationException("Snake has no body");
-    public Position PreviousHead { get; private set; }
+    public Position PreviousHead => PreviousBody[0];
     
     public Snake()
     {
         Body = new LinkedList<Position>();
         Body.AddFirst(new Position(5, 5)); // posición inicial
         CurrentDirection = Direction.Right;
+        PreviousBody = Body.ToList();
     }
 
     public void Move(bool grow = false)
     {
+        PreviousBody = Body.ToList();
+        
         var direction =  CurrentDirection.ToVector();
-
-        PreviousHead = Head; // 👈 guardar antes de mover
-
         var newHead = new Position(
             Head.X + direction.X,
             Head.Y + direction.Y

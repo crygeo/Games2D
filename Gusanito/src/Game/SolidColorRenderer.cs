@@ -1,10 +1,14 @@
+
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Gusanito.Enum;
 using Gusanito.Game;
+using Gusanito.Interfaz;
 
-public class WriteableBitmapRenderer
+namespace Gusanito.Rendering;
+
+public sealed class SolidColorRenderer : ISnakeRenderer
 {
     private readonly WriteableBitmap _bitmap;
     private readonly int _width;
@@ -13,20 +17,20 @@ public class WriteableBitmapRenderer
 
     public WriteableBitmap Bitmap => _bitmap;
 
-    public WriteableBitmapRenderer(int width, int height, int cellSize)
+    public SolidColorRenderer(int width, int height, int cellSize)
     {
-        _width = width;
-        _height = height;
+        _width    = width;
+        _height   = height;
         _cellSize = cellSize;
 
         _bitmap = new WriteableBitmap(
-            width * cellSize,
+            width  * cellSize,
             height * cellSize,
             96, 96,
             PixelFormats.Bgra32,
             null);
     }
-    
+
     public void Draw(GameEngine game, float tick)
     {
         _bitmap.Lock();
@@ -34,11 +38,9 @@ public class WriteableBitmapRenderer
         unsafe
         {
             IntPtr buffer = _bitmap.BackBuffer;
-            int stride = _bitmap.BackBufferStride;
+            int stride    = _bitmap.BackBufferStride;
 
-            // Limpiar (fondo negro)
             Clear(buffer, stride);
-
             DrawMap(game, buffer, stride);
             DrawSnake(game, buffer, stride, tick);
         }
@@ -113,26 +115,21 @@ public class WriteableBitmapRenderer
     private unsafe void DrawSnake(GameEngine game, IntPtr buffer, int stride, float t)
     {
         var snake = game.Snake;
+        var current = snake.Body.ToList();
+        var previous = snake.PreviousBody;
 
-        var prev = snake.PreviousHead;
-        var head = snake.Head;
+        int count = Math.Min(current.Count, previous.Count);
 
-        float interpX = prev.X + (head.X - prev.X) * t;
-        float interpY = prev.Y + (head.Y - prev.Y) * t;
-
-        DrawCellInterpolated(buffer, stride, interpX, interpY, 0, 255, 0);
-
-        // dibujar resto del cuerpo (por ahora sin interpolar)
-        bool skipHead = true;
-        foreach (var part in snake.Body)
+        for (int i = 0; i < count; i++)
         {
-            if (skipHead)
-            {
-                skipHead = false;
-                continue;
-            }
+            float interpX = previous[i].X + (current[i].X - previous[i].X) * t;
+            float interpY = previous[i].Y + (current[i].Y - previous[i].Y) * t;
 
-            DrawCell(buffer, stride, part.X, part.Y, 0, 200, 0);
+            byte r = i == 0 ? (byte)0   : (byte)0;
+            byte g = i == 0 ? (byte)255 : (byte)200;
+            byte b = (byte)0;
+
+            DrawCellInterpolated(buffer, stride, interpX, interpY, r, g, b);
         }
     }
     private unsafe void DrawCellInterpolated(IntPtr buffer, int stride, float gridX, float gridY, byte r, byte g, byte b)

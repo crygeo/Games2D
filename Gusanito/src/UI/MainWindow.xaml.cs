@@ -13,7 +13,9 @@ using Gusanito.Config;
 using Gusanito.Enum;
 using Gusanito.Game;
 using Gusanito.Helpers;
+using Gusanito.Interfaz;
 using Gusanito.Models;
+using Gusanito.Rendering;
 
 namespace Gusanito;
 
@@ -27,7 +29,7 @@ public partial class MainWindow : Window
     public GameSettings Settings { get; }
     
     //private GameRenderer _renderer;
-    private WriteableBitmapRenderer _renderer;
+    private ISnakeRenderer _renderer;
     
 
     private DateTime _lastFrameTime;
@@ -43,12 +45,14 @@ public partial class MainWindow : Window
         
         _game = new GameEngine(Settings);
 
-        //_renderer = new GameRenderer(GameImage, Settings);
-        _renderer = new WriteableBitmapRenderer(
-            Settings.Width,
-            Settings.Height,
-            GameConstants.CellSize
-        );
+        // Solid:
+        //_renderer = new SolidColorRenderer(Settings.Width, Settings.Height, GameConstants.CellSize);
+        
+        // Sprite:
+         var source    = new BitmapImage(new Uri("src/img/snake.png", UriKind.RelativeOrAbsolute));
+         var tilemap   = new Tilemap(source, 64, 64);
+         var mapper    = new SnakeTileMapper(tilemap);
+         _renderer     = new SpriteRenderer(Settings.Width, Settings.Height, GameConstants.CellSize, 64, mapper);
 
         GameImage.Source = _renderer.Bitmap;
         
@@ -121,7 +125,7 @@ public partial class MainWindow : Window
         // Evitamos que la serpiente se mueva en dirección opuesta a la actual, lo que causaría una colisión inmediata
         if (!DirectionHelper.IsOpposite(_game.Snake.CurrentDirection, newDirection))
         {
-            _game.Snake.CurrentDirection = newDirection;
+            _game.EnqueueDirection(newDirection);
         }
     }
 }
