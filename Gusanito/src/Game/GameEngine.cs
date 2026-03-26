@@ -91,6 +91,8 @@ public class GameEngine
             Map[nextHead.X, nextHead.Y] = CellType.Empty;
             GenerateFood();
         }
+        
+        Snake.JustRespawned = false;
     }
 
     private void GenerateFood()
@@ -112,14 +114,27 @@ public class GameEngine
     {
         if(!IsGameOver)
             return;
-        
+    
         IsGameOver = false;
+
         Snake = new Snake();
 
         InitializeMap();
         GenerateWalls();
-        
+    
         GenerateFood();
+    
+        for (int i = 0; i < GameConstants.InitialSnakeLength - 1; i++)
+        {
+            Snake.Move(grow: true);
+        }
+
+        // 🔴 CLAVE: sincronizar estados
+        Snake.PreviousBody = Snake.Body
+            .Select(p => new Position(p.X, p.Y))
+            .ToList();
+
+        Snake.JustRespawned = true;
     }
     
     

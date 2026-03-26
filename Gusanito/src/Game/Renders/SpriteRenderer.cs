@@ -21,8 +21,9 @@ public sealed class SpriteRenderer : ISnakeRenderer
 
     public WriteableBitmap Bitmap => _bitmap;
 
+    //no funciona con interpolación, pero es más fluida sin ella. Dejo el código por si acaso quiero volver a probarlo en el futuro.
     public SpriteRenderer(int width, int height, int cellSize, int tileSize, SnakeTileMapper tileMapper,
-        bool interpolated = true)
+        bool interpolated = false)
     {
         ArgumentNullException.ThrowIfNull(tileMapper);
 
@@ -91,28 +92,50 @@ public sealed class SpriteRenderer : ISnakeRenderer
 
     private unsafe void DrawSnake(GameEngine game, IntPtr buffer, int stride, float t)
     {
-        var current = game.Snake.Body.ToList();
+        var current  = game.Snake.Body.ToList();
         var previous = game.Snake.PreviousBody;
 
-        var segments = SnakeTileResolver.ResolveAll(current, previous, game.Snake.CurrentDirection);
-        int count = segments.Count;
+        var segments  = SnakeTileResolver.ResolveAll(current, previous, game.Snake.CurrentDirection);
+        int count     = segments.Count;
 
+        // Paso 1 — calcular posiciones interpoladas en cadena
+        var interpolated = new (float x, float y)[count];
+
+        for (int i = 0; i < count; i++)
+        {
+            var (_, tile) = segments[i];
+
+            if (i == 0)
+            {
+                interpolated[0] = (
+                    previous[0].X + (current[0].X - previous[0].X) * t,
+                    previous[0].Y + (current[0].Y - previous[0].Y) * t
+                );
+            }
+            else if (IsCurve(tile))
+            {
+                // La curva se queda fija en su posición actual
+                interpolated[i] = (current[i].X, current[i].Y);
+            }
+            else
+            {
+                interpolated[i] = (
+                    previous[i].X + (previous[i - 1].X - previous[i].X) * t,
+                    previous[i].Y + (previous[i - 1].Y - previous[i].Y) * t
+                );
+            }
+        }
+
+        // Paso 2 — dibujar con las posiciones calculadas
         for (int i = 0; i < count; i++)
         {
             var (_, tile) = segments[i];
             byte[] pixels = _tileMapper.GetPixels(tile);
 
-            
             if (_interpolated)
-            {
-                float interpX = previous[i].X + (current[i].X - previous[i].X) * t;
-                float interpY = previous[i].Y + (current[i].Y - previous[i].Y) * t;
-                DrawTileInterpolated(buffer, stride, interpX, interpY, pixels);
-            }
+                DrawTileInterpolated(buffer, stride, interpolated[i].x, interpolated[i].y, pixels);
             else
-            {
                 DrawTile(buffer, stride, current[i].X, current[i].Y, pixels);
-            }
         }
     }
 

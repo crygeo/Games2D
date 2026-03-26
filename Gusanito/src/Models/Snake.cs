@@ -8,7 +8,8 @@ public class Snake
     
     public Direction CurrentDirection { get; set; }
     public LinkedList<Position> Body { get; private set; }
-    public IReadOnlyList<Position> PreviousBody { get; private set; }
+    public IReadOnlyList<Position> PreviousBody { get; set; }
+    public bool JustRespawned { get; set; }
 
     public Position Head => Body.First?.Value ?? throw new InvalidOperationException("Snake has no body");
     public Position PreviousHead => PreviousBody[0];

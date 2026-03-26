@@ -12,6 +12,7 @@ using System.Windows.Threading;
 using Gusanito.Config;
 using Gusanito.Enum;
 using Gusanito.Game;
+using Gusanito.Game.Renders;
 using Gusanito.Helpers;
 using Gusanito.Interfaz;
 using Gusanito.Models;
@@ -45,15 +46,24 @@ public partial class MainWindow : Window
         
         _game = new GameEngine(Settings);
 
-        // Solid:
+        
+        // Solid: Pruevas
         //_renderer = new SolidColorRenderer(Settings.Width, Settings.Height, GameConstants.CellSize);
         
-        // Sprite:
-         var source    = new BitmapImage(new Uri("src/img/snake.png", UriKind.RelativeOrAbsolute));
-         var tilemap   = new Tilemap(source, 64, 64);
-         var mapper    = new SnakeTileMapper(tilemap);
-         _renderer     = new SpriteRenderer(Settings.Width, Settings.Height, GameConstants.CellSize, 64, mapper);
+        // Sprite: Funciona pero sin interpolacion
+          var source    = new BitmapImage(new Uri("src/img/snake.png", UriKind.RelativeOrAbsolute));
+          var tilemap   = new Tilemap(source, 64, 64);
+          var mapper    = new SnakeTileMapper(tilemap);
+          _renderer     = new SpriteRenderer(Settings.Width, Settings.Height, GameConstants.CellSize, 64, mapper);
 
+         //_renderer = new LineRenderer(Settings.Width, Settings.Height, GameConstants.CellSize, 15);
+         
+         //_renderer = new SnakeRendererPro(Settings.Width, Settings.Height, GameConstants.CellSize, 10);
+         
+         //_renderer = new CapsuleSnakeRenderer(Settings.Width, Settings.Height, GameConstants.CellSize, 10);
+         
+         //_renderer = new PathSnakeRenderer(Settings.Width, Settings.Height, GameConstants.CellSize, 10);
+         
         GameImage.Source = _renderer.Bitmap;
         
         _tickRate = Settings.SpeedMs / 1000.0;
