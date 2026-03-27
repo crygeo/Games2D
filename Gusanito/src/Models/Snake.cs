@@ -14,10 +14,11 @@ public class Snake
     public Position Head => Body.First?.Value ?? throw new InvalidOperationException("Snake has no body");
     public Position PreviousHead => PreviousBody[0];
     
-    public Snake()
+    public Snake(int x, int y)
     {
         Body = new LinkedList<Position>();
-        Body.AddFirst(new Position(5, 5)); // posición inicial
+        
+        Body.AddFirst(new Position(x, y));
         CurrentDirection = Direction.Right;
         PreviousBody = Body.ToList();
     }
@@ -40,11 +41,25 @@ public class Snake
     
     public Position GetNextHeadPosition()
     {
+        return GetNextHeadPosition(CurrentDirection);
+    }
+    
+    public Position GetNextHeadPosition(Direction dir)
+    {
         var direction = CurrentDirection.ToVector();
 
         return new Position(
             Head.X + direction.X,
             Head.Y + direction.Y
         );
+    }
+    
+    public Snake Clone()
+    {
+        return new Snake(Head.X, Head.Y)
+        {
+            Body = new LinkedList<Position>( this.Body.Select(p => new Position(p.X, p.Y)).ToList()),
+            CurrentDirection = this.CurrentDirection
+        };
     }
 }

@@ -1,7 +1,9 @@
 {
-  "Width": 50,
-  "Height": 50,
-  "SpeedMs": 80,
+  "WidthMap": 25,
+  "HeightMap": 25,
+  "Walls": 1,
+  "LaneSize": 1,
+  "SpeedMs": 120,
   "WrapAround": false,
-  "ScorePerFood": 10
+  "ScorePerFood": 1
 }

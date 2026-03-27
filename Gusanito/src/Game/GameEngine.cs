@@ -10,7 +10,12 @@ public class GameEngine
     public bool IsGameOver { get; private set; } = true;
     public bool IsPaused { get; private set; }
     
+    public int Score { get; private set; }
+    public TimeSpan ElapsedTime { get; set; } = TimeSpan.Zero;
+    
     private readonly GameSettings _settings;
+    public int Width => _settings.Width;
+    public int Height => _settings.Height;
     
     public Snake Snake { get; private set; }
     public Position Food { get; private set; }
@@ -60,13 +65,15 @@ public class GameEngine
     
     public void Update()
     {
-        // Consumir un input al inicio del tick
-        if (_inputQueue.Count > 0)
+        
+        // Consumir input solo cuando estamos en un múltiplo de 5
+        bool canTurn = Snake.Head.X % _settings.LaneSize == 0 && Snake.Head.Y % _settings.LaneSize == 0;
+    
+        if (canTurn && _inputQueue.Count > 0)
             Snake.CurrentDirection = _inputQueue.Dequeue();
 
-        var nextHead = Snake.GetNextHeadPosition(); // 👈 clave
+        var nextHead = Snake.GetNextHeadPosition();
 
-        //Válida su proximo movimiento.
         if (IsSelfCollision(nextHead))
         {
             IsGameOver = true;
@@ -83,15 +90,18 @@ public class GameEngine
 
         bool shouldGrow = cell == CellType.Food;
 
-        // ✅ ahora sí mover con contexto correcto
         Snake.Move(shouldGrow);
 
         if (shouldGrow)
         {
             Map[nextHead.X, nextHead.Y] = CellType.Empty;
+            for (int i = 0; i < _settings.LaneSize - 1; i++)
+                Snake.Move(grow: true);
+            
             GenerateFood();
+            Score++;
         }
-        
+
         Snake.JustRespawned = false;
     }
 
@@ -101,30 +111,44 @@ public class GameEngine
 
         do
         {
-            x = _random.Next(_settings.Width);
-            y = _random.Next(_settings.Height);
+            x = _random.Next(1, _settings.WidthMap  / _settings.LaneSize) * _settings.LaneSize + _settings.Walls;
+            y = _random.Next(1, _settings.HeightMap / _settings.LaneSize) * _settings.LaneSize + _settings.Walls;
         }
-        while (Map[x, y] != CellType.Empty);
+        while (Map[x, y] != CellType.Empty || IsOnSnake(x, y));
 
         Map[x, y] = CellType.Food;
         Food = new Position(x, y);
     }
 
+    private bool IsOnSnake(int x, int y)
+    {
+        return Snake.Body.Any(p => p.X == x && p.Y == y);
+    }
+
+    
+
     public void NewGame()
     {
+        Score = 0;
+        ElapsedTime = TimeSpan.Zero;
+        
         if(!IsGameOver)
             return;
     
         IsGameOver = false;
 
-        Snake = new Snake();
+        // Snake.cs
+        int cx = 5;
+        int cy = (_settings.Height / 2 / _settings.LaneSize) * _settings.LaneSize;
+        
+        Snake = new Snake(cx, cy);
 
         InitializeMap();
         GenerateWalls();
     
         GenerateFood();
     
-        for (int i = 0; i < GameConstants.InitialSnakeLength - 1; i++)
+        for (int i = 0; i < (_settings.ScorePerFood - 1) * _settings.LaneSize; i++)
         {
             Snake.Move(grow: true);
         }
@@ -166,5 +190,21 @@ public class GameEngine
         }
     }
 
-    
+    public GameEngine Clone()
+    {
+        var clone = new GameEngine(this._settings);
+
+        // copiar mapa
+        clone.Map = (CellType[,])this.Map.Clone();
+
+        // copiar snake
+        clone.Snake = this.Snake.Clone();
+
+        // copiar estado
+        clone.Score = this.Score;
+        clone.IsGameOver = this.IsGameOver;
+        clone.IsPaused = this.IsPaused;
+
+        return clone;
+    }
 }

@@ -34,11 +34,13 @@ public static class GameSettingsLoader
             
             return new GameSettings
             {
-                Width = 20,
-                Height = 20,
+                WidthMap = 20,
+                HeightMap = 20,
+                LaneSize = 1,
                 SpeedMs = 150,
                 WrapAround = false,
-                ScorePerFood = 10
+                ScorePerFood = 10,
+                Walls = 1
             };
         }
     }
