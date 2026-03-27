@@ -39,15 +39,12 @@ public class Snake
             Body.RemoveLast();
     }
     
-    public Position GetNextHeadPosition()
-    {
-        return GetNextHeadPosition(CurrentDirection);
-    }
+    public Position GetNextHeadPosition() => GetNextHeadPosition(CurrentDirection);
     
     public Position GetNextHeadPosition(Direction dir)
     {
-        var direction = CurrentDirection.ToVector();
-
+        var direction = dir.ToVector();
+ 
         return new Position(
             Head.X + direction.X,
             Head.Y + direction.Y
