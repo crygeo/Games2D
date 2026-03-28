@@ -23,30 +23,34 @@ public static class HamiltonianPathBuilder
     /// Builds a Hamiltonian cycle starting from <paramref name="start"/>.
     /// Returns an ordered list of positions forming the cycle, or an empty list if none was found.
     /// </summary>
-    public static IReadOnlyList<Position> Build(CellType[,] map, int width, int height, Position start)
+    // HamiltonianPathBuilder.cs
+    public static IReadOnlyList<Position> Build(
+        CellType[,] map, int width, int height, 
+        Position start,
+        CancellationToken ct = default)  // ← agregar
     {
         var walkable = CollectWalkable(map, width, height);
         int total    = walkable.Count;
 
-        if (total == 0)
-            return Array.Empty<Position>();
+        if (total == 0) return Array.Empty<Position>();
 
-        // Index map: position → index in walkable list, for O(1) lookup
         var indexMap = new Dictionary<Position, int>(total);
         for (int i = 0; i < total; i++)
             indexMap[walkable[i]] = i;
 
-        var visited = new bool[total];
-        var path    = new Position[total];
+        var visited  = new bool[total];
+        var path     = new Position[total];
         int startIdx = indexMap.TryGetValue(start, out var si) ? si : 0;
 
-        path[0]          = walkable[startIdx];
+        path[0]           = walkable[startIdx];
         visited[startIdx] = true;
 
-        bool found = Backtrack(map, width, height, walkable, indexMap, visited, path, 1, total);
+        bool found = Backtrack(map, width, height, walkable, indexMap, visited, path, 1, total, ct);
 
         return found ? path : Array.Empty<Position>();
     }
+
+    
 
     /// <summary>
     /// Fast structured construction for boards where width is even.
@@ -90,8 +94,11 @@ public static class HamiltonianPathBuilder
         bool[] visited,
         Position[] path,
         int depth,
-        int total)
+        int total,
+        CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
+        
         if (depth == total)
         {
             // Check if last position connects back to start (forms a cycle)
@@ -114,7 +121,7 @@ public static class HamiltonianPathBuilder
             path[depth]  = neighbor;
             visited[idx] = true;
 
-            if (Backtrack(map, width, height, walkable, indexMap, visited, path, depth + 1, total))
+            if (Backtrack(map, width, height, walkable, indexMap, visited, path, depth + 1, total, ct))
                 return true;
 
             visited[idx] = false;

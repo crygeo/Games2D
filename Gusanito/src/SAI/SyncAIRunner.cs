@@ -29,7 +29,7 @@ public sealed class SyncAIRunner : ISnakeAI
     /// Call this after NewGame() — it may block for several seconds on large boards.
     /// For large boards, run this on a background thread manually and show a loading state.
     /// </summary>
-    public void RebuildCycle(GameEngine game)
+    public void   RebuildCycle(GameEngine game)
     {
         if (_inner is HamiltonianAI hamAI)
             hamAI.RebuildCycle(game);

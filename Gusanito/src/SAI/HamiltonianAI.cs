@@ -47,18 +47,25 @@ public sealed class HamiltonianAI : ISnakeAI
 
         var start = game.Snake.Head;
 
-        IReadOnlyList<Position> cycle = Array.Empty<Position>();
-
         using var cts = new CancellationTokenSource(_buildTimeout);
-        var task = Task.Run(
-            () => HamiltonianPathBuilder.Build(game.Map, game.Width, game.Height, start),
-            cts.Token);
+
+        IReadOnlyList<Position> cycle = Array.Empty<Position>();
 
         try
         {
-            cycle = task.GetAwaiter().GetResult();
+            cycle = Task.Run(
+                () => HamiltonianPathBuilder.Build(game.Map, game.Width, game.Height, start, cts.Token),
+                cts.Token
+            ).GetAwaiter().GetResult();
         }
-        catch (OperationCanceledException) { /* timeout — use fallback */ }
+        catch (OperationCanceledException)
+        {
+            // Timeout real — el backtracking fue interrumpido limpiamente
+        }
+        catch (AggregateException ex) when (ex.InnerException is OperationCanceledException)
+        {
+            // GetAwaiter().GetResult() en algunos paths wrappea en AggregateException
+        }
 
         if (cycle.Count == 0)
             cycle = HamiltonianPathBuilder.BuildStructured(game.Map, game.Width, game.Height);
