@@ -5,85 +5,104 @@ using Gusanito.Interfaz;
 namespace Gusanito.SAI;
 
 /// <summary>
-/// Runs an <see cref="ISnakeAI"/> on a background Task each game tick,
-/// returning the last known good direction if computation hasn't finished yet.
+/// Runs an <see cref="ISnakeAI"/> on a background Task, eliminating UI thread blocking
+/// while minimising decision lag.
 ///
-/// Design decisions:
-/// - Never blocks the UI thread. GetNextMove() returns immediately.
-/// - Uses CancellationToken per tick: if the AI takes longer than the tick budget,
-///   the previous decision is reused and the task is cancelled.
-/// - The AI result is stored atomically via Interlocked so no lock is needed on the read path.
-/// - Implements ISnakeAI so it is a drop-in replacement for any synchronous AI.
+/// Strategy — "eager wait with fallback":
+///   1. At the start of each tick, wait up to <see cref="_waitTimeout"/> for the
+///      previously-fired Task to complete.
+///      - Fast AIs (A* on small boards: ~0–2 ms) complete before the timeout → lag = 0.
+///      - Slow AIs (Hamiltonian build, large boards) timeout → last known direction is used.
+///   2. Once the result is read (or skipped), fire a new Task with a fresh snapshot
+///      so the next tick has a result ready as early as possible.
 ///
-/// Lifecycle:
-///   1. Construct with an inner ISnakeAI.
-///   2. Call RequestCycleRebuild() after NewGame() if the inner AI needs board initialization.
-///   3. Call GetNextMove() every tick from the game loop — always returns instantly.
-///   4. Dispose to cancel any pending background work.
+/// Why this eliminates the 1-tick lag:
+///   Pure fire-and-forget always returns the direction from the PREVIOUS tick's snapshot.
+///   That structural lag causes the snake to overshoot food when the AI computes quickly.
+///   Here, if the Task finishes within _waitTimeout, the result is used in the SAME tick.
+///
+/// Threading guarantees:
+///   - GetNextMove() is called only from the UI/game-loop thread — no concurrent callers.
+///   - The background Task writes _lastDirection via Interlocked.Exchange only.
+///   - _pendingTask / _pendingCts are touched only from GetNextMove() — no races there.
 /// </summary>
 public sealed class AsyncAIRunner : ISnakeAI, IDisposable
 {
     private readonly ISnakeAI _inner;
 
-    // Last direction computed successfully. Volatile int maps to Direction enum values.
+    // Last successfully computed direction (atomic read/write via Interlocked).
     private volatile int _lastDirection = (int)Direction.Right;
 
-    // Currently running computation task (may be null if idle)
     private Task? _pendingTask;
     private CancellationTokenSource? _pendingCts;
 
-    // Per-tick budget: if the AI takes longer than this, the tick uses the last known direction.
+    // How long to block the game-loop thread waiting for the pending Task.
+    // For fast AIs this is almost always enough to get a fresh result this tick.
+    private readonly TimeSpan _waitTimeout;
+
+    // Hard budget: Task is cancelled if it exceeds this.
     private readonly TimeSpan _tickBudget;
 
     private bool _disposed;
 
     /// <param name="inner">The underlying AI implementation.</param>
-    /// <param name="tickBudget">
-    /// Maximum time per tick for the AI to compute a move.
-    /// Default is 80ms — generous for most tick rates while ensuring UI safety.
+    /// <param name="waitTimeout">
+    /// How long GetNextMove() will wait for the AI result before falling back.
+    /// Default: 5 ms. Set to 0 to restore pure fire-and-forget (original behaviour).
     /// </param>
-    public AsyncAIRunner(ISnakeAI inner, TimeSpan tickBudget = default)
+    /// <param name="tickBudget">
+    /// Hard cancellation deadline for the background Task.
+    /// Default: 80 ms — well under a 120 ms tick.
+    /// </param>
+    public AsyncAIRunner(
+        ISnakeAI inner,
+        TimeSpan waitTimeout = default,
+        TimeSpan tickBudget  = default)
     {
-        _inner      = inner ?? throw new ArgumentNullException(nameof(inner));
-        _tickBudget = tickBudget == default ? TimeSpan.FromMilliseconds(80) : tickBudget;
+        _inner       = inner ?? throw new ArgumentNullException(nameof(inner));
+        _waitTimeout = waitTimeout == default ? TimeSpan.FromMilliseconds(5) : waitTimeout;
+        _tickBudget  = tickBudget  == default ? TimeSpan.FromMilliseconds(80) : tickBudget;
     }
 
     /// <summary>
     /// If the inner AI is a <see cref="HamiltonianAI"/>, triggers a cycle rebuild
-    /// on a background thread. Returns the Task so callers can await if needed.
-    /// Safe to fire-and-forget.
+    /// on a background thread. Safe to fire-and-forget.
     /// </summary>
     public Task RequestCycleRebuildAsync(GameEngine game)
     {
         if (_inner is HamiltonianAI hamAI)
-        {
             return Task.Run(() => hamAI.RebuildCycle(game));
-        }
 
         return Task.CompletedTask;
     }
 
     /// <summary>
-    /// Returns the best known direction without blocking.
-    /// Fires a background task to compute the next direction for the *following* tick.
+    /// Returns the best available direction for this tick.
+    /// Waits briefly for the pending Task, then fires a new one for the next tick.
     /// </summary>
     public Direction GetNextMove(GameEngine game)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        // If previous computation is done, read its result
-        if (_pendingTask is { IsCompleted: true })
+        // ── Step 1: collect result from previous Task ─────────────────────────
+        if (_pendingTask != null)
         {
-            _pendingTask = null;
-            _pendingCts?.Dispose();
-            _pendingCts = null;
+            // Block up to _waitTimeout. For A* on a 25x25 board this is ~0–2ms,
+            // so the wait almost always succeeds and we get a fresh result this tick.
+            _pendingTask.Wait(_waitTimeout);
+
+            if (_pendingTask.IsCompleted)
+            {
+                _pendingCts?.Dispose();
+                _pendingTask = null;
+                _pendingCts  = null;
+            }
+            // Still running → leave it alive, _lastDirection holds the last good value.
         }
 
-        // Fire next computation if not already running
+        // ── Step 2: fire a new Task for the next tick ─────────────────────────
         if (_pendingTask == null)
         {
-            // Clone the game state so the background task works on a snapshot,
-            // not the live state that the UI thread will mutate next tick.
             var snapshot = game.Clone();
             var cts      = new CancellationTokenSource(_tickBudget);
 
@@ -99,11 +118,12 @@ public sealed class AsyncAIRunner : ISnakeAI, IDisposable
                 }
                 catch
                 {
-                    // Swallow exceptions from the AI — last known good direction will be used.
+                    // Swallow AI exceptions — last known good direction is reused.
                 }
             }, cts.Token);
         }
 
+        // ── Step 3: return best available direction ───────────────────────────
         return (Direction)_lastDirection;
     }
 

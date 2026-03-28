@@ -43,8 +43,8 @@ public partial class MainVM : ObservableObject
 
     private bool _useAI = true;
 
-    private readonly AsyncAIRunner _aiRunner;
-    private readonly HamiltonianAI _hamiltonianAI;
+    private readonly SyncAIRunner _aiRunner;
+    private readonly ISnakeAI _ia;
 
     public MainVM()
     {
@@ -54,13 +54,16 @@ public partial class MainVM : ObservableObject
 
         #region IA
 
-        _hamiltonianAI = new HamiltonianAI(
+
+        //_ia = new SnakeAI();
+        _ia = new HamiltonianAI(
             shortcutEvaluator: new ShortcutEvaluator(dangerRatio: 0.6f, minReachableRatio: 0.35f),
             buildTimeout: TimeSpan.FromSeconds(5));
 
-        _aiRunner = new AsyncAIRunner(_hamiltonianAI, tickBudget: TimeSpan.FromMilliseconds(80));
+        _aiRunner = new SyncAIRunner(_ia);
 
-        _ = _aiRunner.RequestCycleRebuildAsync(_game);
+        _game.NewGame();
+        _aiRunner.RebuildCycle(_game);
 
         #endregion
 
@@ -89,6 +92,7 @@ public partial class MainVM : ObservableObject
         TimeText = _game.ElapsedTime.ToString(@"mm\:ss");
         IsGameOver = _game.IsGameOver;
         IsPaused = _game.IsPaused;
+        _game.NewGame();
 
         _tickRate = Settings.SpeedMs / 1000.0;
 
@@ -145,8 +149,11 @@ public partial class MainVM : ObservableObject
 
         if (e.Key == Key.Enter)
         {
-            _game.NewGame();
-            _ = _aiRunner.RequestCycleRebuildAsync(_game);
+            if (_game.NewGame())
+            {
+                _aiRunner.RebuildCycle(_game);
+            }
+
             return;
         }
 
@@ -182,10 +189,5 @@ public partial class MainVM : ObservableObject
             _game.EnqueueDirection(newDirection);
         }
     }
-    
-    public void Dispose()
-   {
-       CompositionTarget.Rendering -= GameLoop;
-       _aiRunner.Dispose();
-   }
+
 }
